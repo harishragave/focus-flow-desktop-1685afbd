@@ -11,6 +11,7 @@ import {
   MenuIcon,
   PanelLeft
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface NavigationLink {
   name: string;
@@ -22,9 +23,10 @@ interface NavigationSidebarProps {
   currentPage: string;
   onNavigate: (page: string) => void;
   onLogout: () => void;
+  activeTaskId?: string | null;
 }
 
-const NavigationSidebar = ({ currentPage, onNavigate, onLogout }: NavigationSidebarProps) => {
+const NavigationSidebar = ({ currentPage, onNavigate, onLogout, activeTaskId }: NavigationSidebarProps) => {
   const [collapsed, setCollapsed] = useState(false);
   
   const links: NavigationLink[] = [
@@ -62,8 +64,20 @@ const NavigationSidebar = ({ currentPage, onNavigate, onLogout }: NavigationSide
             )}
             onClick={() => onNavigate(link.href)}
           >
-            <span className="mr-3">{link.icon}</span>
-            {!collapsed && <span>{link.name}</span>}
+            <span className="mr-3 relative">
+              {link.icon}
+              {link.href === "active-task" && activeTaskId && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+              )}
+            </span>
+            {!collapsed && (
+              <div className="flex justify-between items-center w-full">
+                <span>{link.name}</span>
+                {link.href === "active-task" && activeTaskId && (
+                  <Badge variant="destructive" className="ml-auto">Active</Badge>
+                )}
+              </div>
+            )}
           </Button>
         ))}
       </div>

@@ -1,12 +1,15 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import TaskList, { Task } from "@/components/TaskList";
 import TaskDetail from "@/components/TaskDetail";
 import TaskTimer from "@/components/TaskTimer";
+import TaskForm from "@/components/TaskForm";
 import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// Dummy data for tasks
-const dummyTasks: Task[] = [
+// Initial dummy data for tasks
+const initialTasks: Task[] = [
   {
     id: "task1",
     title: "Create Landing Page Design",
@@ -20,6 +23,7 @@ const dummyTasks: Task[] = [
       { id: "sub1-3", title: "Design high fidelity mockup", completed: false },
       { id: "sub1-4", title: "Prepare for review", completed: false },
     ],
+    projectId: "project1"
   },
   {
     id: "task2",
@@ -34,39 +38,19 @@ const dummyTasks: Task[] = [
       { id: "sub2-3", title: "Implement error handling", completed: false },
       { id: "sub2-4", title: "Write tests", completed: false },
     ],
-  },
-  {
-    id: "task3",
-    title: "Fix Navigation Bug",
-    description: "Fix the issue with dropdown navigation not working on mobile devices.",
-    priority: "low",
-    dueDate: "2025-05-03",
-    estimatedTime: 60, // 1 hour
-    subtasks: [
-      { id: "sub3-1", title: "Reproduce the bug", completed: true },
-      { id: "sub3-2", title: "Debug the issue", completed: false },
-      { id: "sub3-3", title: "Test fix on mobile devices", completed: false },
-    ],
-  },
-  {
-    id: "task4",
-    title: "Write User Documentation",
-    description: "Create user guide documentation for the new feature set launching next week.",
-    priority: "medium",
-    dueDate: "2025-05-12",
-    estimatedTime: 240, // 4 hours
-    subtasks: [
-      { id: "sub4-1", title: "Outline main sections", completed: true },
-      { id: "sub4-2", title: "Write first draft", completed: false },
-      { id: "sub4-3", title: "Add screenshots", completed: false },
-      { id: "sub4-4", title: "Review with team", completed: false },
-      { id: "sub4-5", title: "Finalize and publish", completed: false },
-    ],
-  },
+    projectId: "project2"
+  }
+];
+
+// Initial projects
+const initialProjects = [
+  { id: "project1", name: "Marketing Website" },
+  { id: "project2", name: "Payment System" },
 ];
 
 const Dashboard = () => {
-  const [tasks] = useState<Task[]>(dummyTasks);
+  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [projects, setProjects] = useState(initialProjects);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
@@ -75,6 +59,37 @@ const Dashboard = () => {
   
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) || null;
   const activeTask = tasks.find((task) => task.id === activeTaskId) || null;
+  
+  // Load tasks from local storage on component mount
+  useEffect(() => {
+    const savedTasks = localStorage.getItem('tasks');
+    if (savedTasks) {
+      try {
+        setTasks(JSON.parse(savedTasks));
+      } catch (error) {
+        console.error('Error parsing saved tasks:', error);
+      }
+    }
+    
+    const savedProjects = localStorage.getItem('projects');
+    if (savedProjects) {
+      try {
+        setProjects(JSON.parse(savedProjects));
+      } catch (error) {
+        console.error('Error parsing saved projects:', error);
+      }
+    }
+  }, []);
+  
+  // Save tasks to local storage when they change
+  useEffect(() => {
+    localStorage.setItem('tasks', JSON.stringify(tasks));
+  }, [tasks]);
+  
+  // Save projects to local storage when they change
+  useEffect(() => {
+    localStorage.setItem('projects', JSON.stringify(projects));
+  }, [projects]);
   
   const handleSelectTask = (task: Task) => {
     setSelectedTaskId(task.id);
@@ -110,6 +125,19 @@ const Dashboard = () => {
     setActiveTaskId(null);
     setIsPaused(false);
     setIsOnBreak(false);
+    
+    // Mark the task as completed by updating all subtasks to completed
+    setTasks(prevTasks => 
+      prevTasks.map(task => 
+        task.id === taskId 
+          ? {
+              ...task, 
+              subtasks: task.subtasks.map(subtask => ({ ...subtask, completed: true }))
+            }
+          : task
+      )
+    );
+    
     toast({
       title: "Task Completed",
       description: "Great job! Task has been completed",
@@ -132,25 +160,102 @@ const Dashboard = () => {
     });
   };
   
+  const handleAddTask = (newTask: Task) => {
+    setTasks(prevTasks => [...prevTasks, newTask]);
+  };
+  
+  const getProjectTasks = (projectId: string) => {
+    return tasks.filter(task => task.projectId === projectId);
+  };
+  
+  const getUnassignedTasks = () => {
+    return tasks.filter(task => !task.projectId);
+  };
+  
   return (
     <div className="h-full flex flex-col gap-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
-        <TaskList
-          tasks={tasks}
-          onSelectTask={handleSelectTask}
-          selectedTaskId={selectedTaskId}
-        />
-        <TaskDetail
-          task={selectedTask}
-          onStartTask={handleStartTask}
-          onPauseTask={handlePauseTask}
-          onCompleteTask={handleCompleteTask}
-          onTakeBreak={handleTakeBreak}
-          currentTaskId={activeTaskId}
-          isPaused={isPaused}
-          isOnBreak={isOnBreak}
-        />
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <TaskForm onAddTask={handleAddTask} />
       </div>
+      
+      <Tabs defaultValue="all" className="flex-1">
+        <TabsList className="mb-4">
+          <TabsTrigger value="all">All Tasks</TabsTrigger>
+          {projects.map(project => (
+            <TabsTrigger key={project.id} value={project.id}>
+              {project.name}
+            </TabsTrigger>
+          ))}
+          <TabsTrigger value="unassigned">Unassigned</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="all" className="flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+            <TaskList
+              tasks={tasks}
+              onSelectTask={handleSelectTask}
+              selectedTaskId={selectedTaskId}
+              onAddTask={handleAddTask}
+            />
+            <TaskDetail
+              task={selectedTask}
+              onStartTask={handleStartTask}
+              onPauseTask={handlePauseTask}
+              onCompleteTask={handleCompleteTask}
+              onTakeBreak={handleTakeBreak}
+              currentTaskId={activeTaskId}
+              isPaused={isPaused}
+              isOnBreak={isOnBreak}
+            />
+          </div>
+        </TabsContent>
+        
+        {projects.map(project => (
+          <TabsContent key={project.id} value={project.id} className="flex-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+              <TaskList
+                tasks={getProjectTasks(project.id)}
+                onSelectTask={handleSelectTask}
+                selectedTaskId={selectedTaskId}
+                onAddTask={handleAddTask}
+                projectId={project.id}
+              />
+              <TaskDetail
+                task={selectedTask}
+                onStartTask={handleStartTask}
+                onPauseTask={handlePauseTask}
+                onCompleteTask={handleCompleteTask}
+                onTakeBreak={handleTakeBreak}
+                currentTaskId={activeTaskId}
+                isPaused={isPaused}
+                isOnBreak={isOnBreak}
+              />
+            </div>
+          </TabsContent>
+        ))}
+        
+        <TabsContent value="unassigned" className="flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+            <TaskList
+              tasks={getUnassignedTasks()}
+              onSelectTask={handleSelectTask}
+              selectedTaskId={selectedTaskId}
+              onAddTask={handleAddTask}
+            />
+            <TaskDetail
+              task={selectedTask}
+              onStartTask={handleStartTask}
+              onPauseTask={handlePauseTask}
+              onCompleteTask={handleCompleteTask}
+              onTakeBreak={handleTakeBreak}
+              currentTaskId={activeTaskId}
+              isPaused={isPaused}
+              isOnBreak={isOnBreak}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
       
       {activeTask && (
         <div className="flex-none h-80">

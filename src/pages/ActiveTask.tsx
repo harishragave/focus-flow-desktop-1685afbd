@@ -5,43 +5,78 @@ import TaskTimer from "@/components/TaskTimer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { PlusCircle } from "lucide-react";
+import { v4 as uuidv4 } from "uuid";
 import { useToast } from "@/hooks/use-toast";
 
-// Dummy active task data
-const dummyActiveTask: Task = {
-  id: "task1",
-  title: "Create Landing Page Design",
-  description: "Design the landing page mockup for the new marketing campaign.",
-  priority: "high",
-  dueDate: "2025-05-05",
-  estimatedTime: 120, // 2 hours
-  subtasks: [
-    { id: "sub1-1", title: "Research design trends", completed: true },
-    { id: "sub1-2", title: "Create wireframe", completed: true },
-    { id: "sub1-3", title: "Design high fidelity mockup", completed: false },
-    { id: "sub1-4", title: "Prepare for review", completed: false },
-  ],
-};
-
 const ActiveTask = () => {
-  const [activeTask, setActiveTask] = useState<Task | null>(dummyActiveTask);
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [isOnBreak, setIsOnBreak] = useState(false);
-  const [subtasks, setSubtasks] = useState(activeTask?.subtasks || []);
+  const [subtasks, setSubtasks] = useState<any[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const { toast } = useToast();
   
+  // Load active task data from localStorage
+  useEffect(() => {
+    const activeTaskId = localStorage.getItem('activeTaskId');
+    const isPausedState = localStorage.getItem('isPaused') === 'true';
+    const isOnBreakState = localStorage.getItem('isOnBreak') === 'true';
+    
+    if (activeTaskId) {
+      const savedTasks = localStorage.getItem('tasks');
+      if (savedTasks) {
+        try {
+          const parsedTasks = JSON.parse(savedTasks);
+          const foundTask = parsedTasks.find((task: Task) => task.id === activeTaskId);
+          
+          if (foundTask) {
+            setActiveTask(foundTask);
+            setSubtasks(foundTask.subtasks);
+            setIsPaused(isPausedState);
+            setIsOnBreak(isOnBreakState);
+          }
+        } catch (error) {
+          console.error('Error parsing saved tasks:', error);
+        }
+      }
+    }
+  }, []);
+  
+  // Save active task state to localStorage whenever it changes
   useEffect(() => {
     if (activeTask) {
-      setSubtasks(activeTask.subtasks);
+      localStorage.setItem('activeTaskId', activeTask.id);
+      localStorage.setItem('isPaused', String(isPaused));
+      localStorage.setItem('isOnBreak', String(isOnBreak));
+      
+      // Update the task in localStorage with new subtasks
+      const savedTasks = localStorage.getItem('tasks');
+      if (savedTasks) {
+        try {
+          const parsedTasks = JSON.parse(savedTasks);
+          const updatedTasks = parsedTasks.map((task: Task) => 
+            task.id === activeTask.id ? { ...task, subtasks } : task
+          );
+          localStorage.setItem('tasks', JSON.stringify(updatedTasks));
+        } catch (error) {
+          console.error('Error updating tasks in localStorage:', error);
+        }
+      }
     }
-  }, [activeTask]);
+  }, [activeTask, subtasks, isPaused, isOnBreak]);
   
   const handleSubtaskToggle = (subtaskId: string) => {
+    if (!activeTask) return;
+    
     const updatedSubtasks = subtasks.map((subtask) =>
       subtask.id === subtaskId
         ? { ...subtask, completed: !subtask.completed }
         : subtask
     );
+    
     setSubtasks(updatedSubtasks);
     
     if (activeTask) {
@@ -50,6 +85,32 @@ const ActiveTask = () => {
         subtasks: updatedSubtasks,
       });
     }
+  };
+
+  const handleAddSubtask = () => {
+    if (!activeTask || newSubtaskTitle.trim() === "") return;
+    
+    const newSubtask = {
+      id: uuidv4(),
+      title: newSubtaskTitle,
+      completed: false,
+    };
+    
+    const updatedSubtasks = [...subtasks, newSubtask];
+    setSubtasks(updatedSubtasks);
+    setNewSubtaskTitle("");
+    
+    if (activeTask) {
+      setActiveTask({
+        ...activeTask,
+        subtasks: updatedSubtasks,
+      });
+    }
+    
+    toast({
+      title: "Subtask Added",
+      description: `Added "${newSubtaskTitle}" to subtasks`,
+    });
   };
   
   const handlePauseTask = () => {
@@ -69,7 +130,31 @@ const ActiveTask = () => {
   };
   
   const handleCompleteTask = () => {
+    // Mark all subtasks as completed
+    if (activeTask) {
+      const completedSubtasks = subtasks.map(subtask => ({ ...subtask, completed: true }));
+      
+      // Update localStorage
+      const savedTasks = localStorage.getItem('tasks');
+      if (savedTasks) {
+        try {
+          const parsedTasks = JSON.parse(savedTasks);
+          const updatedTasks = parsedTasks.map((task: Task) => 
+            task.id === activeTask.id ? { ...task, subtasks: completedSubtasks } : task
+          );
+          localStorage.setItem('tasks', JSON.stringify(updatedTasks));
+        } catch (error) {
+          console.error('Error updating tasks in localStorage:', error);
+        }
+      }
+    }
+    
+    // Clear active task
     setActiveTask(null);
+    localStorage.removeItem('activeTaskId');
+    localStorage.removeItem('isPaused');
+    localStorage.removeItem('isOnBreak');
+    
     toast({
       title: "Task Completed",
       description: "Great job! Task has been completed",
@@ -131,7 +216,23 @@ const ActiveTask = () => {
           </CardHeader>
           <CardContent>
             <h3 className="text-sm font-medium mb-2">Subtasks</h3>
-            <ScrollArea className="h-[calc(100%-40px)]">
+            <div className="flex items-center space-x-2 mb-4">
+              <Input 
+                value={newSubtaskTitle}
+                onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                placeholder="Add a new subtask"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleAddSubtask();
+                  }
+                }}
+                className="flex-1"
+              />
+              <Button onClick={handleAddSubtask} size="sm">
+                <PlusCircle size={16} />
+              </Button>
+            </div>
+            <ScrollArea className="h-[calc(100%-100px)]">
               <div className="space-y-2">
                 {subtasks.map((subtask) => (
                   <div
@@ -153,6 +254,9 @@ const ActiveTask = () => {
                     </label>
                   </div>
                 ))}
+                {subtasks.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No subtasks</p>
+                )}
               </div>
             </ScrollArea>
           </CardContent>

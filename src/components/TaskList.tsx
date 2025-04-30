@@ -14,6 +14,7 @@ export interface Task {
   dueDate: string;
   estimatedTime: number; // in minutes
   subtasks: Subtask[];
+  projectId?: string; // Optional project ID that this task belongs to
 }
 
 export interface Subtask {
@@ -26,9 +27,11 @@ interface TaskListProps {
   tasks: Task[];
   onSelectTask: (task: Task) => void;
   selectedTaskId: string | null;
+  onAddTask?: (task: Task) => void;
+  projectId?: string;
 }
 
-const TaskList = ({ tasks, onSelectTask, selectedTaskId }: TaskListProps) => {
+const TaskList = ({ tasks, onSelectTask, selectedTaskId, onAddTask, projectId }: TaskListProps) => {
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "high":

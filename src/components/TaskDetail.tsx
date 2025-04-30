@@ -1,12 +1,15 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar, Clock } from "lucide-react";
-import { Task } from "@/components/TaskList";
+import { Calendar, Clock, PlusCircle } from "lucide-react";
+import { Task, Subtask } from "@/components/TaskList";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import { v4 as uuidv4 } from "uuid";
+import { useToast } from "@/hooks/use-toast";
 
 interface TaskDetailProps {
   task: Task | null;
@@ -17,6 +20,7 @@ interface TaskDetailProps {
   currentTaskId: string | null;
   isPaused: boolean;
   isOnBreak: boolean;
+  onUpdateTask?: (task: Task) => void;
 }
 
 const TaskDetail = ({
@@ -28,21 +32,92 @@ const TaskDetail = ({
   currentTaskId,
   isPaused,
   isOnBreak,
+  onUpdateTask,
 }: TaskDetailProps) => {
   const [subtasks, setSubtasks] = useState(task?.subtasks || []);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const { toast } = useToast();
 
   // Update subtasks when task changes
-  if (task && task.subtasks !== subtasks) {
-    setSubtasks(task.subtasks);
-  }
+  useEffect(() => {
+    if (task) {
+      setSubtasks(task.subtasks);
+    }
+  }, [task]);
 
   const handleSubtaskToggle = (subtaskId: string) => {
+    if (!task) return;
+    
     const updatedSubtasks = subtasks.map((subtask) =>
       subtask.id === subtaskId
         ? { ...subtask, completed: !subtask.completed }
         : subtask
     );
+    
     setSubtasks(updatedSubtasks);
+    
+    // If onUpdateTask is provided, call it with the updated task
+    if (onUpdateTask) {
+      onUpdateTask({
+        ...task,
+        subtasks: updatedSubtasks,
+      });
+    }
+    
+    // Update the task in localStorage
+    const savedTasks = localStorage.getItem('tasks');
+    if (savedTasks) {
+      try {
+        const tasks = JSON.parse(savedTasks);
+        const updatedTasks = tasks.map((t: Task) =>
+          t.id === task.id ? { ...t, subtasks: updatedSubtasks } : t
+        );
+        localStorage.setItem('tasks', JSON.stringify(updatedTasks));
+      } catch (error) {
+        console.error('Error updating tasks in localStorage:', error);
+      }
+    }
+  };
+
+  const handleAddSubtask = () => {
+    if (!task || newSubtaskTitle.trim() === "") return;
+    
+    const newSubtask: Subtask = {
+      id: uuidv4(),
+      title: newSubtaskTitle,
+      completed: false,
+    };
+    
+    const updatedSubtasks = [...subtasks, newSubtask];
+    setSubtasks(updatedSubtasks);
+    setNewSubtaskTitle("");
+    
+    // If onUpdateTask is provided, call it with the updated task
+    if (onUpdateTask) {
+      onUpdateTask({
+        ...task,
+        subtasks: updatedSubtasks,
+      });
+    }
+    
+    // Update the task in localStorage
+    const savedTasks = localStorage.getItem('tasks');
+    if (savedTasks) {
+      try {
+        const tasks = JSON.parse(savedTasks);
+        const updatedTasks = tasks.map((t: Task) =>
+          t.id === task.id ? { ...t, subtasks: updatedSubtasks } : t
+        );
+        localStorage.setItem('tasks', JSON.stringify(updatedTasks));
+      } catch (error) {
+        console.error('Error updating tasks in localStorage:', error);
+      }
+    }
+    
+    toast({
+      title: "Subtask Added",
+      description: `Added "${newSubtaskTitle}" to subtasks`,
+    });
   };
 
   const getPriorityColor = (priority: string) => {
@@ -108,7 +183,24 @@ const TaskDetail = ({
         </div>
 
         <h3 className="text-sm font-medium mb-2">Subtasks</h3>
-        <ScrollArea className="h-[200px] mb-4">
+        <div className="flex items-center space-x-2 mb-4">
+          <Input 
+            value={newSubtaskTitle}
+            onChange={(e) => setNewSubtaskTitle(e.target.value)}
+            placeholder="Add a new subtask"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleAddSubtask();
+              }
+            }}
+            className="flex-1"
+          />
+          <Button onClick={handleAddSubtask} size="sm">
+            <PlusCircle size={16} />
+          </Button>
+        </div>
+        
+        <ScrollArea className="h-[150px] mb-4">
           <div className="space-y-2">
             {subtasks.map((subtask) => (
               <div
